@@ -61,6 +61,7 @@ def review_with_gemini(diff):
     # retry logic for when met with 503 errors (google api server error not code error)
     attempts = 3
     for attempt in range(1, attempts + 1):
+        # send POST request (heres data process it and repond) passing our dictionary as JSON auto via json=arugment
         response = requests.post(url, json=body)
 
         #503 means try again later - rety with short pause instead of failing immediately
@@ -72,18 +73,12 @@ def review_with_gemini(diff):
 
         response.raise_for_status()  # raise exception if gemini responds with an error
         data = response.json()  # JSON parses response text into a Python dictionary
-        return data["candidates"][0]["content"][0]["parts"][0]["text"]  # return the actual review text
+        
+        # gemini returns the actual reply several layers deep, we walk into that structure here
+        # first result ("candidates"[0]), its content, its first part, then its text itself.
+        return data["candidates"][0]["content"]["parts"][0]["text"]  # return the actual review text
     
-    # send POST request (heres data process it and repond) passing our dictionary as JSON auto via json=arugment
-    response = requests.post(url, json=body)
-    response.raise_for_status()  # raise exception if gemini responds with an error
-
-    data = response.json() # JSON parses response text into a Python dictionary
-
-    # gemini returns the actual reply several layers deep, we walk into that structure here
-    # first result ("candidates"[0]), its content, its first part, then its text itself.
-    return data["candidates"][0]["content"][0]["parts"][0]["text"]
-
+    
 # post gemini's review as a comment on the pull request
 # NOTE: PR COMMENTS USE THE "ISSUES" ENDPOINT in githubs api - every PR is technically also an "issue" under the hood
 def post_comment(review_text): 
