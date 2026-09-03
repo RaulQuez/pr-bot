@@ -39,8 +39,8 @@ def get_pr_diff():
 def review_with_gemini(diff):
     #gemini api endpoint for code review
     url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    f"gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
     )
 
     # our prompt to gemini and we embed our diff inside
