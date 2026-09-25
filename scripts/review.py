@@ -5,7 +5,8 @@ import requests # lets us make http calls, used to talk to github api & gemini A
 
 # read in the secrets/values passed from the workflow
 # os.environ is a dictionary of all environment variables available to this scirpt
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+GEMINI_API_KEY = os.environ("GEMINI_API_KEY")
+MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 GITHUB_TOKEN = os.environ["GITHUB_TOKEN"] # auto provided by github actions
 PR_NUMBER = os.environ["PR_NUMBER"] # which PR number triggered this run
 REPO = os.environ["REPO"]   # REPO name, e.g "raulquez/pr-bot"
@@ -27,7 +28,7 @@ def get_pr_diff():
     }
 
     # send the actual GET request
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=headers, timeout=30)
 
     # if github responds with an error this line raises an exception instead of continuing
     response.raise_for_status()
@@ -38,13 +39,12 @@ def get_pr_diff():
 # we pass the diff to the gemini api and get back written feedback
 def review_with_gemini(diff):
     #gemini api endpoint for code review
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    )
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
+    
+    headers = {"x-goog-api-key": GEMINI_API_KEY}
 
     # our prompt to gemini and we embed our diff inside
-    prompt = f"""Your are a helpful, concise code reviewer. Review this pull request diff.
+    prompt = f"""You are a helpful, concise code reviewer. Review this pull request diff.
     Point out real bugs, risky patterns, and style issues. Use short markdown bullet points.
     If the Code looks solid say so briefly instead of inventing nitpicks.
 
@@ -57,14 +57,14 @@ def review_with_gemini(diff):
     body = {"contents": [{"parts": [{"text": prompt}]}]}
 
     # send POST request (heres data process it and repond) passing our dictionary as JSON auto via json=arugment
-    response = requests.post(url, json=body)
+    response = requests.post(url, headers=headers, json=body, timeout=60)
     response.raise_for_status()  # raise exception if gemini responds with an error
 
     data = response.json() # JSON parses response text into a Python dictionary
 
     # gemini returns the actual reply several layers deep, we walk into that structure here
     # first result ("candidates"[0]), its content, its first part, then its text itself.
-    return data["candidates"][0]["content"][0]["parts"][0]["text"]
+    return data["candidates"][0]["content"]["parts"][0]["text"]
 
 # post gemini's review as a comment on the pull request
 # NOTE: PR COMMENTS USE THE "ISSUES" ENDPOINT in githubs api - every PR is technically also an "issue" under the hood
@@ -79,7 +79,7 @@ def post_comment(review_text):
     # the heading & the review text /n so it renders clearly
     body = {"body": f"## Gemini Code Review\n\n{review_text}"}
 
-    response = requests.post(url, headers=headers, json=body)
+    response = requests.post(url, headers=headers, json=body, timeout=30)
     response.raise_for_status()  # raise exception if github responds with an error
 
 def main():
@@ -102,6 +102,10 @@ def main():
 
 # this checks hether the scirpt is being run directly. This is a standard python pattern
 if __name__ == "__main__":
+
+    if not GEMINI_API_KEY:
+        print("GEMINI_API_KEY not set. skipping AI review")
+        sys.exit(0)
     try:
         main() # run the main function
     except Exception as e: 
